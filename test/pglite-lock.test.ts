@@ -396,6 +396,22 @@ describe('pglite-lock v2 classifier', () => {
     })).toEqual({ state: 'live_owner', reclaimable: false, reason: 'owner_identity_matches' });
   });
 
+  test('treats legacy Darwin microseconds as the same boot second', () => {
+    expect(classifyLockRecord({ ...record, boot_id: 'darwin:1784071793:98305' }, {
+      currentBootId: 'darwin:1784071793',
+      processLiveness: 'alive',
+      currentProcessStartedAt: 'start-a',
+    })).toEqual({ state: 'live_owner', reclaimable: false, reason: 'owner_identity_matches' });
+  });
+
+  test('still reclaims a Darwin record from a different boot second', () => {
+    expect(classifyLockRecord({ ...record, boot_id: 'darwin:1784071792:999999' }, {
+      currentBootId: 'darwin:1784071793',
+      processLiveness: 'alive',
+      currentProcessStartedAt: 'start-a',
+    })).toEqual({ state: 'preboot', reclaimable: true, reason: 'boot_identity_changed' });
+  });
+
   test('reclaims same-boot PID reuse', () => {
     expect(classifyLockRecord(record, {
       currentBootId: 'boot-a',

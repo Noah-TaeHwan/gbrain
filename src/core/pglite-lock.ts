@@ -105,6 +105,20 @@ function isLockRecordV2(value: unknown): value is LockRecordV2 {
 }
 
 /**
+ * Compare boot identities while accepting Darwin lock-v2 records written as
+ * `darwin:<sec>:<usec>`. macOS can change the microsecond component after
+ * clock adjustments even though the boot itself is unchanged. Linux boot
+ * UUIDs and unknown formats retain exact-match semantics.
+ */
+function bootIdentitiesMatch(left: string, right: string): boolean {
+  const canonical = (value: string): string => {
+    const match = value.match(/^darwin:(\d+)(?::\d+)?$/);
+    return match ? `darwin:${match[1]}` : value;
+  };
+  return canonical(left) === canonical(right);
+}
+
+/**
  * Classify a parsed lock without performing I/O. Unknown identity evidence is
  * fail-closed. A command mismatch is deliberately not part of this decision.
  */
@@ -124,7 +138,7 @@ export function classifyLockRecord(record: unknown, probe: LockProbeSnapshot): L
 
   if (isLockRecordV2(record)
     && probe.currentBootId
-    && record.boot_id !== probe.currentBootId) {
+    && !bootIdentitiesMatch(record.boot_id, probe.currentBootId)) {
     return { state: 'preboot', reclaimable: true, reason: 'boot_identity_changed' };
   }
 
@@ -185,7 +199,7 @@ export function readBootIdentity(): string | undefined {
         stdio: ['ignore', 'pipe', 'ignore'],
       });
       const match = raw.match(/sec\s*=\s*(\d+)\s*,\s*usec\s*=\s*(\d+)/);
-      return match ? `darwin:${match[1]}:${match[2]}` : undefined;
+      return match ? `darwin:${match[1]}` : undefined;
     }
   } catch {
     // Identity evidence is optional at acquisition time and fail-closed later.
